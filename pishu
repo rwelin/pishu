@@ -1,0 +1,415 @@
+#!/bin/bash
+
+TPB='http://thepiratebay.org' # Site that the script searches
+NAME='pirsh'            # Name of the scrip
+USAGE="$NAME [OPTION]... [SEARCH WORD]..." # Usage help message
+
+#----------------------------------------------------------------
+#  temp files
+#----------------------------------------------------------------
+PIRATE_DIR=$(mktemp -d)         # Temporary directory
+SEED_LIST=$PIRATE_DIR/seedlist  # Seed/leecher statuses
+RES_LIST=$PIRATE_DIR/reslist    # List of search resluts
+TOR_LIST=$PIRATE_DIR/torlist    # List of corresponding torrents
+INFO_LIST=$PIRATE_DIR/infolist  # Extra informatio
+
+#----------------------------------------------------------------
+#  switches
+#----------------------------------------------------------------
+VIDEO="--video"     # Video search switch
+AUDIO="--audio"     # Audio search switch
+GAME="--game"       # Game search switch
+ALL="--all"         # All categories search switch
+TOP="--top"         # Top list search switch
+SEARCH="--search"   # Search switch
+HELP="--help"       # Display help switch
+INTER="--interactive" # Starts script in interactive mode
+
+declare -a CATEGORIES
+CATEGORIES=("$VIDEO" "$AUDIO" "$GAME" "$ALL")
+
+#----------------------------------------------------------------
+# interactive commands
+#----------------------------------------------------------------
+I_TOP="top"
+I_SEARCH="search"
+I_HELP="help"
+I_CATEGORY="category"
+I_INFO="info"
+I_DOWNLOAD="download"
+I_LIST="list"
+I_QUIT="quit"
+declare -a I_COMMANDS
+I_COMMANDS=("$I_TOP" "$I_SEARCH" "$I_HELP" "$I_CATEGORY" "$I_LIST" "$I_QUIT")
+
+#===  FUNCTION  ========================================================
+#        NAME: print_help
+# DESCRIPTION: Prints a help message and exits
+#=======================================================================
+function print_help
+{
+echo "NAME:
+    $NAME - a torrent download tool for fellow pirates (ARGH)
+
+USAGE:
+    $USAGE
+
+OPTIONS:
+    $HELP
+        Display help message
+    
+    $SEARCH
+        Do a search (default option)
+
+    $TOP
+        Search top list, no search string required
+
+    $ALL
+        Search all categories (default option)
+
+    $VIDEO
+        Search for video only
+
+    $AUDIO
+        Search for audio only
+"
+    exit 0
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: bad_option
+# DESCRIPTION: 
+#=======================================================================
+function bad_option
+{
+    echo "$NAME: unrecognized option '$1'
+Usage: $USAGE
+
+Try '$NAME $HELP' for more options."
+    exit 1
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: prompt
+# DESCRIPTION: Asks the user a question and 
+#              returns 1 if [nN] and otherwise 0
+# PARAMETER 1: The question
+#     EXAMPLE: prompt "Download item?"
+#=======================================================================
+function prompt
+{
+    echo -n " $1 [Y/n] "
+    read -n 1 cont
+    echo ""
+    [[ $cont =~ [nN] ]] && return 1
+    if [ $# == 1 ] ; then
+        return 0
+    else
+        eval ${@:2:$(($#-1))}
+    fi
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: cleanup_temp
+# DESCRIPTION: Remove temporary directory $PIRATE_DIR and exit
+#=======================================================================
+function cleanup_temp
+{
+    [ -e $PIRATE_DIR ] && rm --recursive --force $PIRATE_DIR
+    exit 0
+}
+
+#----------------------------------------------------------------
+#  traps
+#----------------------------------------------------------------
+trap cleanup_temp SIGHUP SIGINT SIGPIPE SIGTERM
+
+#===  FUNCTION  ========================================================
+#        NAME: print_info
+# DESCRIPTION: Takes a torrent html page from tpb and pipes the
+#              info into less
+# PARAMETER 1: The name of the downloaded html page
+#=======================================================================
+function print_info
+{
+    sed --quiet '/<div class=\"nfo\">/,/<\/div>/p' $1 | \
+        sed 's/<[^>]*>//g' | less
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: list
+# DESCRIPTION: Downloads a tpb search result page and extracts 
+#              torrent names, torrent urls and some information
+# PARAMETER 1: The url of the search
+#    EXAMPLES: list "thepiratebay.org/search/pulp fiction/0/7/200"
+#              list "thepiratebay.org/top/all" 
+#=======================================================================
+function list
+{
+    tmp=$PIRATE_DIR/tmp
+    wget --quiet --continue "$1" -O $tmp
+    grep "<div class=\"detName\"" $tmp | \
+        awk '{gsub(/href=|"/,""); print $3}' \
+        > $RES_LIST
+    grep "title=\"Download this torrent\"" $tmp | \
+        awk '{gsub(/href=|"/,""); print $2}' \
+        > $TOR_LIST
+    grep "<td align=\"right\">" $tmp | \
+        awk '{gsub(/<[^>]*>|^[ \t]*/,""); print}' \
+        > $SEED_LIST
+    grep "<font class=\"detDesc\">" $tmp | \
+        awk '{gsub(/<[^>]*>|^[ \t]*/,""); gsub(/&nbsp;/," "); print}' \
+        > $INFO_LIST
+    rm --force $tmp     
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: top
+# DESCRIPTION: Calls the list function for the top list page
+# PARAMETER 1: A switch for which top list should be listed
+#=======================================================================
+function top
+{
+    case "$1" in 
+        $VIDEO) type=200 ;;
+        $AUDIO) type=100 ;;
+        $GAME)  type=400 ;;
+        *)      type=0   ;;
+    esac
+    list "$TPB/top/$type"
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: search
+# DESCRIPTION: Searches $TPB
+# PARAMETER 1: The type to be searched for
+# PARAMETER 2: The name of the media to be searched for
+#=======================================================================
+function search
+{
+    case "$1" in 
+        $VIDEO) type=200 ;;
+        $AUDIO) type=100 ;;
+        $GAME)  type=400 ;;
+        *)      type=0   ;;
+    esac
+    srcstr=${@:2:$(($#-1))}
+    list "$TPB/search/$srcstr/0/7/$type"
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: print_res_list
+# DESCRIPTION: Prints out lines from $RES_LIST
+# PARAMETER 1: The line number of the first line to print
+# PARAMETER 2: The number of lines to print
+#     EXAMPLE: print_res_list 3 12 # prints out lines 3 through 14
+#=======================================================================
+function print_res_list
+{
+    index=$1
+    start=$(($1+$2-1))
+    length=$2
+    for line in `head -$start $RES_LIST | tail -$length` ; do
+        echo "$index :: $(basename $line)"
+        ((index++))
+    done
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: info
+# DESCRIPTION: Downloads a tbp torrent page and 
+#              displays the info section
+# PARAMETER 1: The url of the torrent page
+#=======================================================================
+function info
+{
+    tmp=$(mktemp)
+    wget --quiet --continue $1 --output-document $tmp && \
+        print_info $tmp
+    rm $tmp      
+}
+
+#===  FUNCTION  ========================================================
+# NAME: download
+# DESCRIPTION: Downloads a file
+# PARAMETER 1: The url of the file
+#=======================================================================
+function download
+{
+    wget --quiet --continue $1
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: main
+# DESCRIPTION:
+#=======================================================================
+function main
+{
+    if [ $1 == $TOP ] ; then
+        top $2
+    else
+        search ${@:2:$(($#-1))}
+    fi
+    num=1
+    lines=`cat $RES_LIST | wc -l`
+    for line in `cat $RES_LIST` ; do
+        info=`head -$(($num)) $INFO_LIST | tail -1`
+        seeders=`head -$(($num*2-1)) $SEED_LIST | tail -1`
+        leechers=`head -$(($num*2)) $SEED_LIST | tail -1`
+        echo "($num/$lines) :: $(basename $line)"
+        echo "    $info"
+        echo "    Seeds: $seeders Leechers: $leechers"
+        prompt "Get info?" info '$TPB$line'
+        prompt "Download torrent?" \
+            download '$(head -$num $TOR_LIST | tail -1)' && break
+        prompt "Next result?" || break
+        ((num++))
+    done
+    cleanup_temp
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: set_category
+# DESCRIPTION: 
+#=======================================================================
+function set_category
+{
+    CATEGORY="--$1"
+    for ((i=0; i < ${#CATEGORIES}; i++)) ; do
+        [[ "${CATEGORIES[${i}]}" == "$CATEGORY" ]] && return 0
+    done
+    CATEGORY="$ALL"
+    echo "category: $1 no such category."
+    return 1
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: print_list
+# DESCRIPTION: Prints ten elements in the results list at a time
+#              and asks 
+#=======================================================================
+function print_list
+{
+    if [ -e $RES_LIST ] ; then
+        for ((idx=1; 1; idx+=10)) ; do
+            print_res_list $idx 10
+            prompt "Next ten?" || break
+        done
+    else
+        echo "list: No current search results."
+    fi
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: interactive_info
+# DESCRIPTION: Displays the info page of a torrent in interactive mode
+# PARAMETER 1: The number in the result list
+#=======================================================================  
+function interactive_info
+{
+    lines=`cat $RES_LIST | wc -l`
+    if [[ $lines -lt $1 ]] ; then
+        echo "info: Only $lines results available"
+        return 1
+    fi
+    res=`head -$1 $RES_LIST | tail -1`
+    info "$TPB$res"
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: print_interactive_help
+# DESCRIPTION: Prints the interactive help message
+#=======================================================================
+function print_interactive_help
+{
+    echo "Interactive $NAME
+COMMANDS:
+    $I_TOP      - Get top torrents
+    $I_SEARCH   - Search for torrents
+    $I_LIST     - List search results
+    $I_INFO     - Prints torrent info page (usage: $I_INFO <number in list>)
+    $I_DOWNLOAD - Download torrent (usage: $I_DOWNLOAD <number in list>)
+    $I_CATEGORY - Set search category (see CATEGORIES)
+    $I_HELP     - Print this help message
+    $I_QUIT     - Exit the script
+CATEGORIES:
+    all, video, audio, game"
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: interactive_download
+# DESCRIPTION: Downloads a torrent in the results list
+# PARAMETER 1: The number in the results list
+#=======================================================================
+function interactive_download
+{
+    lines=`cat $TOR_LIST | wc -l`
+    if [[ $lines -lt $1 ]] ; then
+        echo "download: Only $lines results available"
+        return 1
+    fi
+    download "$(head -$1 $TOR_LIST | tail -1)"
+    echo "Downloaded torrent: $(basename $(head -$1 $RES_LIST | tail -1))"
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: parse_command
+# DESCRIPTION: Parses the interactive commands
+#=======================================================================
+function parse_command
+{
+    case "$1" in
+        $I_TOP|":t")      top ${@:2:${$#}}                    ;;
+        $I_SEARCH|":s")   search $CATEGORY ${@:2:${$#}}       ;;
+        $I_CATEGORY|":c") set_category $2                     ;;
+        $I_INFO|":i")     interactive_info $2                 ;;
+        $I_DOWNLOAD|":d") interactive_download $2             ;;
+        $I_LIST|":l")     print_list                          ;;
+        $I_HELP|":h"|"?") print_interactive_help              ;;
+        $I_QUIT|":q")     exit 0                              ;;
+        *)                echo "$NAME: command not found: $1" ;;
+    esac
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: interactive_main
+# DESCRIPTION: The main function of the interactive mode
+#=======================================================================
+function interactive_main
+{
+    CATEGORY="$ALL"
+    while [ 0 ] ; do
+        echo -n ">> "
+        read cmd
+        parse_command $cmd
+    done
+}
+
+
+#----------------------------------------------------------------
+# script start
+#----------------------------------------------------------------
+
+args[0]="$SEARCH" # Default search option
+args[1]="$ALL"    # Defualt search category
+
+# If no arguments: print help message
+[[ $# == 0 ]] && bad_option
+
+for arg in "$@" ; do
+    case "$arg" in
+        $TOP|"-t")    args[0]="$TOP"    ;;
+        $SEARCH|"-s") args[0]="$SEARCH" ;;
+        $VIDEO|"-v")  args[1]="$VIDEO"  ;;
+        $AUDIO|"-a")  args[1]="$AUDIO"  ;;
+        $GAME|"-g")   args[1]="$GAME"   ;;
+        $ALL)         args[1]="$ALL"    ;;
+        $HELP|"-h")   print_help        ;;
+        $INTER|"-i")  interactive_main  ;;
+        -*)           bad_option "$arg" ;;
+        *) args[${#args[@]}]="${arg}"   ;;
+    esac
+done
+
+main ${args[@]}
+
