@@ -1,7 +1,7 @@
 #!/bin/bash
 
 TPB='http://thepiratebay.org' # Site that the script searches
-NAME='pirsh'            # Name of the scrip
+NAME='pishu'            # Name of the scrip
 USAGE="$NAME [OPTION]... [SEARCH WORD]..." # Usage help message
 
 #----------------------------------------------------------------
@@ -16,29 +16,44 @@ INFO_LIST=$PIRATE_DIR/infolist  # Extra informatio
 #----------------------------------------------------------------
 #  switches
 #----------------------------------------------------------------
-VIDEO="--video"     # Video search switch
-AUDIO="--audio"     # Audio search switch
-GAME="--game"       # Game search switch
-ALL="--all"         # All categories search switch
+VIDEO="video"     # Video search switch
+AUDIO="audio"     # Audio search switch
+ABOOK="audiobook" # Audio book search switch
+GAME="game"       # Game search switch
+MUSIC="music"     # Music search switch
+MOVIE="movie"     # Movie search switch
+EBOOK="ebook"     # ebook search switch
+ALL="all"         # All categories search switch
 TOP="--top"         # Top list search switch
 SEARCH="--search"   # Search switch
 HELP="--help"       # Display help switch
 INTER="--interactive" # Starts script in interactive mode
 
+# The available search categories
 declare -a CATEGORIES
-CATEGORIES=("$VIDEO" "$AUDIO" "$GAME" "$ALL")
+CATEGORIES=("$VIDEO" "$AUDIO" "$GAME" "$MUSIC" 
+            "$MOVIE" "$ABOOK" "$EBOOK" "$ALL")
+
+# An associative array of all the search categories 
+# and it's corresponding numerical code on TPB
+declare -A search_categories
+search_categories=([$VIDEO]=200 [$AUDIO]=100 [$GAME]=400 
+                   [$MUSIC]=101 [$ABOOK]=102 [$MOVIE]=201 
+                   [$EBOOK]=601 [$ALL]=0)
 
 #----------------------------------------------------------------
 # interactive commands
 #----------------------------------------------------------------
-I_TOP="top"
-I_SEARCH="search"
-I_HELP="help"
-I_CATEGORY="category"
-I_INFO="info"
-I_DOWNLOAD="download"
-I_LIST="list"
-I_QUIT="quit"
+I_TOP=":top"
+I_SEARCH=":search"
+I_HELP=":help"
+I_CATEGORY=":category"
+I_INFO=":info"
+I_DOWNLOAD=":download"
+I_LIST=":list"
+I_QUIT=":quit"
+
+# An array of a available commands in interactive mode
 declare -a I_COMMANDS
 I_COMMANDS=("$I_TOP" "$I_SEARCH" "$I_HELP" "$I_CATEGORY" "$I_LIST" "$I_QUIT")
 
@@ -170,12 +185,7 @@ function list
 #=======================================================================
 function top
 {
-    case "$1" in 
-        $VIDEO) type=200 ;;
-        $AUDIO) type=100 ;;
-        $GAME)  type=400 ;;
-        *)      type=0   ;;
-    esac
+    type=${search_categories["$1"]}
     list "$TPB/top/$type"
 }
 
@@ -187,12 +197,7 @@ function top
 #=======================================================================
 function search
 {
-    case "$1" in 
-        $VIDEO) type=200 ;;
-        $AUDIO) type=100 ;;
-        $GAME)  type=400 ;;
-        *)      type=0   ;;
-    esac
+    type=${search_categories["$1"]}
     srcstr=${@:2:$(($#-1))}
     list "$TPB/search/$srcstr/0/7/$type"
 }
@@ -252,6 +257,7 @@ function main
     fi
     num=1
     lines=`cat $RES_LIST | wc -l`
+    [[ $lines -eq 0 ]] && echo "$NAME: No search results" && cleanup_temp
     for line in `cat $RES_LIST` ; do
         info=`head -$(($num)) $INFO_LIST | tail -1`
         seeders=`head -$(($num*2-1)) $SEED_LIST | tail -1`
@@ -270,11 +276,15 @@ function main
 
 #===  FUNCTION  ========================================================
 #        NAME: set_category
-# DESCRIPTION: 
+# DESCRIPTION: Sets the variable CATEGORY to the corresponding 
+#              category representation of $1. It $1 is not a
+#              valid category, an error message is displayed
+#              and CATEGORY is set to $ALL
+# PARAMETER 1: The category to be set
 #=======================================================================
 function set_category
 {
-    CATEGORY="--$1"
+    CATEGORY="$1"
     for ((i=0; i < ${#CATEGORIES}; i++)) ; do
         [[ "${CATEGORIES[${i}]}" == "$CATEGORY" ]] && return 0
     done
@@ -284,14 +294,23 @@ function set_category
 }
 
 #===  FUNCTION  ========================================================
+#        NAME: get_category
+# DESCRIPTION: Shows the current category
+#=======================================================================
+function get_category
+{
+    echo "Current category: $CATEGORY"
+}
+
+#===  FUNCTION  ========================================================
 #        NAME: print_list
-# DESCRIPTION: Prints ten elements in the results list at a time
-#              and asks 
+# DESCRIPTION: Prints ten elements in the results list at a time       
 #=======================================================================
 function print_list
 {
     if [ -e $RES_LIST ] ; then
-        for ((idx=1; 1; idx+=10)) ; do
+        lines=`cat $RES_LIST | wc -l`
+        for ((idx=1; idx<lines; idx+=10)) ; do
             print_res_list $idx 10
             prompt "Next ten?" || break
         done
@@ -333,7 +352,7 @@ COMMANDS:
     $I_HELP     - Print this help message
     $I_QUIT     - Exit the script
 CATEGORIES:
-    all, video, audio, game"
+    all, video, audio, game, movie, music, audiobook, ebook"
 }
 
 #===  FUNCTION  ========================================================
@@ -379,12 +398,11 @@ function interactive_main
 {
     CATEGORY="$ALL"
     while [ 0 ] ; do
-        echo -n ">> "
+        echo -n "$NAME> "
         read cmd
         parse_command $cmd
     done
 }
-
 
 #----------------------------------------------------------------
 # script start
@@ -397,13 +415,13 @@ args[1]="$ALL"    # Defualt search category
 [[ $# == 0 ]] && bad_option
 
 for arg in "$@" ; do
+    for ((i=0; i<${#CATEGORIES}; i++)) ; do
+        [[ "$arg" == "--${CATEGORIES[$i]}" ]] && args[1]="${arg:2:${#arg}}" && break
+    done
+    [[ $i -lt ${#CATEGORIES} ]] && continue
     case "$arg" in
         $TOP|"-t")    args[0]="$TOP"    ;;
         $SEARCH|"-s") args[0]="$SEARCH" ;;
-        $VIDEO|"-v")  args[1]="$VIDEO"  ;;
-        $AUDIO|"-a")  args[1]="$AUDIO"  ;;
-        $GAME|"-g")   args[1]="$GAME"   ;;
-        $ALL)         args[1]="$ALL"    ;;
         $HELP|"-h")   print_help        ;;
         $INTER|"-i")  interactive_main  ;;
         -*)           bad_option "$arg" ;;
