@@ -79,14 +79,12 @@ OPTIONS:
     $TOP
         Search top list, no search string required
 
-    $ALL
-        Search all categories (default option)
+    $INTER
+        Run the interactive mode
 
-    $VIDEO
-        Search for video only
-
-    $AUDIO
-        Search for audio only
+SEARCH CATEGORIES:
+    ${CATEGORIES[*]}
+    (prepend with '--' to use as options)
 "
     exit 0
 }
@@ -285,11 +283,11 @@ function main
 function set_category
 {
     CATEGORY="$1"
-    for ((i=0; i < ${#CATEGORIES}; i++)) ; do
+    for ((i=0; i < ${#CATEGORIES[@]}; i++)) ; do
         [[ "${CATEGORIES[${i}]}" == "$CATEGORY" ]] && return 0
     done
     CATEGORY="$ALL"
-    echo "category: $1 no such category."
+    echo "  category: $1 no such category."
     return 1
 }
 
@@ -299,7 +297,7 @@ function set_category
 #=======================================================================
 function get_category
 {
-    echo "Current category: $CATEGORY"
+    echo "  Current category: $CATEGORY"
 }
 
 #===  FUNCTION  ========================================================
@@ -310,12 +308,15 @@ function print_list
 {
     if [ -e $RES_LIST ] ; then
         lines=`cat $RES_LIST | wc -l`
-        for ((idx=1; idx<lines; idx+=10)) ; do
+        for ((idx=1; 1;)) ; do
             print_res_list $idx 10
-            prompt "Next ten?" || break
+            ((idx+=10))
+            if [[ $idx -lt $lines ]] ; then
+                prompt "Next ten?" || break
+            fi
         done
     else
-        echo "list: No current search results."
+        echo "  list: No current search results."
     fi
 }
 
@@ -328,7 +329,7 @@ function interactive_info
 {
     lines=`cat $RES_LIST | wc -l`
     if [[ $lines -lt $1 ]] ; then
-        echo "info: Only $lines results available"
+        echo "  info: Only $lines results available"
         return 1
     fi
     res=`head -$1 $RES_LIST | tail -1`
@@ -348,11 +349,11 @@ COMMANDS:
     $I_LIST     - List search results
     $I_INFO     - Prints torrent info page (usage: $I_INFO <number in list>)
     $I_DOWNLOAD - Download torrent (usage: $I_DOWNLOAD <number in list>)
-    $I_CATEGORY - Set search category (see CATEGORIES)
+    $I_CATEGORY - Set search category (see CATEGORIES) if called with no arguments, the current category is displayed
     $I_HELP     - Print this help message
     $I_QUIT     - Exit the script
 CATEGORIES:
-    all, video, audio, game, movie, music, audiobook, ebook"
+    ${CATEGORIES[*]}"
 }
 
 #===  FUNCTION  ========================================================
@@ -364,11 +365,11 @@ function interactive_download
 {
     lines=`cat $TOR_LIST | wc -l`
     if [[ $lines -lt $1 ]] ; then
-        echo "download: Only $lines results available"
+        echo "  download: Only $lines results available"
         return 1
     fi
     download "$(head -$1 $TOR_LIST | tail -1)"
-    echo "Downloaded torrent: $(basename $(head -$1 $RES_LIST | tail -1))"
+    echo "  Downloaded torrent: $(basename $(head -$1 $RES_LIST | tail -1))"
 }
 
 #===  FUNCTION  ========================================================
@@ -379,8 +380,15 @@ function parse_command
 {
     case "$1" in
         $I_TOP|":t")      top ${@:2:${$#}}                    ;;
-        $I_SEARCH|":s")   search $CATEGORY ${@:2:${$#}}       ;;
-        $I_CATEGORY|":c") set_category $2                     ;;
+        $I_SEARCH|":s")   
+            search $CATEGORY ${@:2:${$#}}       
+            echo "  search: $(cat $RES_LIST | wc -l) results" ;;
+        $I_CATEGORY|":c") 
+            if [[ ${#2} -gt 0 ]] ; then 
+                set_category $2
+            else
+                get_category
+            fi                                                ;;
         $I_INFO|":i")     interactive_info $2                 ;;
         $I_DOWNLOAD|":d") interactive_download $2             ;;
         $I_LIST|":l")     print_list                          ;;
@@ -396,7 +404,7 @@ function parse_command
 #=======================================================================
 function interactive_main
 {
-    CATEGORY="$ALL"
+    set_category "$ALL"
     while [ 0 ] ; do
         echo -n "$NAME> "
         read cmd
@@ -415,10 +423,12 @@ args[1]="$ALL"    # Defualt search category
 [[ $# == 0 ]] && bad_option
 
 for arg in "$@" ; do
-    for ((i=0; i<${#CATEGORIES}; i++)) ; do
-        [[ "$arg" == "--${CATEGORIES[$i]}" ]] && args[1]="${arg:2:${#arg}}" && break
+    for ((i=0; i<${#CATEGORIES[@]}; i++)) ; do
+        if [[ "--${CATEGORIES[${i}]}" == "$arg" ]] ; then
+            args[1]="${arg:2:${#arg}}" && break
+        fi
     done
-    [[ $i -lt ${#CATEGORIES} ]] && continue
+    [[ $i -lt ${#CATEGORIES[@]} ]] && continue
     case "$arg" in
         $TOP|"-t")    args[0]="$TOP"    ;;
         $SEARCH|"-s") args[0]="$SEARCH" ;;
