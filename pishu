@@ -255,7 +255,10 @@ function main
     fi
     num=1
     lines=`cat $RES_LIST | wc -l`
-    [[ $lines -eq 0 ]] && echo "$NAME: No search results" && cleanup_temp
+    if [[ $lines -eq 0 ]] ; then 
+        echo "$NAME: No search results"
+        cleanup_temp
+    fi
     for line in `cat $RES_LIST` ; do
         info=`head -$(($num)) $INFO_LIST | tail -1`
         seeders=`head -$(($num*2-1)) $SEED_LIST | tail -1`
@@ -284,10 +287,10 @@ function set_category
 {
     CATEGORY="$1"
     for ((i=0; i < ${#CATEGORIES[@]}; i++)) ; do
-        [[ "${CATEGORIES[${i}]}" == "$CATEGORY" ]] && return 0
+        [[ "${CATEGORIES[$i]}" == "$CATEGORY" ]] && return 0
     done
     CATEGORY="$ALL"
-    echo "  category: $1 no such category."
+    echo "$NAME: category: $1 no such category."
     return 1
 }
 
@@ -316,7 +319,7 @@ function print_list
             fi
         done
     else
-        echo "  list: No current search results."
+        echo "$NAME: list: No current search results."
     fi
 }
 
@@ -329,7 +332,7 @@ function interactive_info
 {
     lines=`cat $RES_LIST | wc -l`
     if [[ $lines -lt $1 ]] ; then
-        echo "  info: Only $lines results available"
+        echo "$NAME: info: Only $lines results available"
         return 1
     fi
     res=`head -$1 $RES_LIST | tail -1`
@@ -365,11 +368,11 @@ function interactive_download
 {
     lines=`cat $TOR_LIST | wc -l`
     if [[ $lines -lt $1 ]] ; then
-        echo "  download: Only $lines results available"
+        echo "$NAME: download: Only $lines results available"
         return 1
     fi
     download "$(head -$1 $TOR_LIST | tail -1)"
-    echo "  Downloaded torrent: $(basename $(head -$1 $RES_LIST | tail -1))"
+    echo "$NAME: Downloaded torrent: $(basename $(head -$1 $RES_LIST | tail -1))"
 }
 
 #===  FUNCTION  ========================================================
@@ -379,22 +382,22 @@ function interactive_download
 function parse_command
 {
     case "$1" in
-        $I_TOP|":t")      top ${@:2:${$#}}                    ;;
+        $I_TOP|":t")      top ${@:2:${$#}}                         ;;
         $I_SEARCH|":s")   
             search $CATEGORY ${@:2:${$#}}       
-            echo "  search: $(cat $RES_LIST | wc -l) results" ;;
+            echo "$NAME: search: $(cat $RES_LIST | wc -l) results" ;;
         $I_CATEGORY|":c") 
             if [[ ${#2} -gt 0 ]] ; then 
                 set_category $2
             else
                 get_category
-            fi                                                ;;
-        $I_INFO|":i")     interactive_info $2                 ;;
-        $I_DOWNLOAD|":d") interactive_download $2             ;;
-        $I_LIST|":l")     print_list                          ;;
-        $I_HELP|":h"|"?") print_interactive_help              ;;
-        $I_QUIT|":q")     exit 0                              ;;
-        *)                echo "$NAME: command not found: $1" ;;
+            fi                                                     ;;
+        $I_INFO|":i")     interactive_info $2                      ;;
+        $I_DOWNLOAD|":d") interactive_download $2                  ;;
+        $I_LIST|":l")     print_list                               ;;
+        $I_HELP|":h"|"?") print_interactive_help                   ;;
+        $I_QUIT|":q")     cleanup_temp                             ;;
+        *)                echo "$NAME: command not found: $1"      ;;
     esac
 }
 
@@ -412,10 +415,6 @@ function interactive_main
     done
 }
 
-#----------------------------------------------------------------
-# script start
-#----------------------------------------------------------------
-
 args[0]="$SEARCH" # Default search option
 args[1]="$ALL"    # Defualt search category
 
@@ -424,7 +423,7 @@ args[1]="$ALL"    # Defualt search category
 
 for arg in "$@" ; do
     for ((i=0; i<${#CATEGORIES[@]}; i++)) ; do
-        if [[ "--${CATEGORIES[${i}]}" == "$arg" ]] ; then
+        if [[ "--${CATEGORIES[$i]}" == "$arg" ]] ; then
             args[1]="${arg:2:${#arg}}" && break
         fi
     done
