@@ -1,5 +1,12 @@
 #!/bin/bash
 
+#
+# PISHU - The Piratebay Shell Utility
+#
+# Maintainer: Robert Welin <robert dot welin at gmail dot com>
+# Last Change: Fri October 07 2011
+#
+
 TPB='http://thepiratebay.org' # Site that the script searches
 NAME='pishu'            # Name of the scrip
 USAGE="$NAME [OPTION]... [SEARCH WORD]..." # Usage help message
@@ -211,9 +218,10 @@ function print_res_list
 {
     index=$1
     start=$(($1+$2-1))
+    lines=`cat $RES_LIST | wc -l`
     length=$2
     for line in `head -$start $RES_LIST | tail -$length` ; do
-        echo "$index :: $(basename $line)"
+        printf "%2d :: $(basename $line)\n" $index
         ((index++))
     done
 }
@@ -309,13 +317,16 @@ function get_category
 #=======================================================================
 function print_list
 {
+    NUM_RESULTS=10
     if [ -e $RES_LIST ] ; then
         lines=`cat $RES_LIST | wc -l`
         for ((idx=1; 1;)) ; do
-            print_res_list $idx 10
-            ((idx+=10))
-            if [[ $idx -lt $lines ]] ; then
+            print_res_list $idx $NUM_RESULTS
+            ((idx+=NUM_RESULTS))
+            if [[ $idx -le $lines ]] ; then
                 prompt "Next ten?" || break
+            else
+                break
             fi
         done
     else
