@@ -362,7 +362,7 @@ COMMANDS:
     $I_SEARCH   - Search for torrents
     $I_LIST     - List search results
     $I_INFO     - Prints torrent info page (usage: $I_INFO <number in list>)
-    $I_DOWNLOAD - Download torrent (usage: $I_DOWNLOAD <number in list>)
+    $I_DOWNLOAD - Download torrent (usage: $I_DOWNLOAD <number in list>...)
     $I_CATEGORY - Set search category (see CATEGORIES) if called with no arguments, the current category is displayed
     $I_HELP     - Print this help message
     $I_QUIT     - Exit the script
