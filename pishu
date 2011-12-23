@@ -378,12 +378,14 @@ CATEGORIES:
 function interactive_download
 {
     lines=`cat $TOR_LIST | wc -l`
-    if [[ $lines -lt $1 ]] ; then
-        echo "$NAME: download: Only $lines results available"
-        return 1
-    fi
-    download "$(head -$1 $TOR_LIST | tail -1)"
-    echo "$NAME: Downloaded torrent: $(basename $(head -$1 $RES_LIST | tail -1))"
+    for index in "$@"; do
+        if [[ $lines -lt $index ]] ; then
+            echo "$NAME: download: Index out of bound at $index. Only $lines results available."
+            return 1
+        fi
+        download "$(head -$index $TOR_LIST | tail -1)"
+        echo "$NAME: Downloaded torrent: $(basename $(head -$index $RES_LIST | tail -1))"
+    done
 }
 
 #===  FUNCTION  ========================================================
@@ -404,7 +406,7 @@ function parse_command
                 get_category
             fi                                                     ;;
         $I_INFO|":i")     interactive_info $2                      ;;
-        $I_DOWNLOAD|":d") interactive_download $2                  ;;
+        $I_DOWNLOAD|":d") interactive_download ${@:2:${$#}}        ;;
         $I_LIST|":l")     print_list                               ;;
         $I_HELP|":h"|"?") print_interactive_help                   ;;
         $I_QUIT|":q")     cleanup_temp                             ;;
