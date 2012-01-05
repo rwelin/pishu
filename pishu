@@ -18,7 +18,7 @@ PIRATE_DIR=$(mktemp -d)         # Temporary directory
 SEED_LIST=$PIRATE_DIR/seedlist  # Seed/leecher statuses
 RES_LIST=$PIRATE_DIR/reslist    # List of search resluts
 TOR_LIST=$PIRATE_DIR/torlist    # List of corresponding torrents
-INFO_LIST=$PIRATE_DIR/infolist  # Extra informatio
+INFO_LIST=$PIRATE_DIR/infolist  # Extra information
 
 #----------------------------------------------------------------
 #  switches
@@ -208,6 +208,23 @@ function search
 }
 
 #===  FUNCTION  ========================================================
+#        NAME: print_basic_info
+# DESCRIPTION: Prints name of torrent with upload date, size, uploader
+#              and the number of leechers and seeds.
+# PARAMETER 1: The index of the torrent in the results list
+#=======================================================================
+function print_basic_info
+{
+    torrent=`head -$1 $RES_LIST | tail -1`
+    info=`head -$1 $INFO_LIST | tail -1`
+    seeders=`head -$(($1*2-1)) $SEED_LIST | tail -1`
+    leechers=`head -$(($1*2)) $SEED_LIST | tail -1`
+    printf "%2d :: $(basename $torrent)\n" $index
+    echo "    $info"
+    echo "    Seeds: $seeders Leechers: $leechers"
+}
+
+#===  FUNCTION  ========================================================
 #        NAME: print_res_list
 # DESCRIPTION: Prints out lines from $RES_LIST
 # PARAMETER 1: The line number of the first line to print
@@ -221,7 +238,8 @@ function print_res_list
     lines=`cat $RES_LIST | wc -l`
     length=$2
     for line in `head -$start $RES_LIST | tail -$length` ; do
-        printf "%2d :: $(basename $line)\n" $index
+        print_basic_info $index
+        echo
         ((index++))
     done
 }
@@ -268,12 +286,7 @@ function main
         cleanup_temp
     fi
     for line in `cat $RES_LIST` ; do
-        info=`head -$(($num)) $INFO_LIST | tail -1`
-        seeders=`head -$(($num*2-1)) $SEED_LIST | tail -1`
-        leechers=`head -$(($num*2)) $SEED_LIST | tail -1`
-        echo "($num/$lines) :: $(basename $line)"
-        echo "    $info"
-        echo "    Seeds: $seeders Leechers: $leechers"
+        print_basic_info $num
         prompt "Get info?" info '$TPB$line'
         prompt "Download torrent?" \
             download '$(head -$num $TOR_LIST | tail -1)' && break
@@ -410,7 +423,9 @@ function parse_command
         $I_LIST|":l")     print_list                               ;;
         $I_HELP|":h"|"?") print_interactive_help                   ;;
         $I_QUIT|":q")     cleanup_temp                             ;;
-        *)                echo "$NAME: command not found: $1"      ;;
+        :*)               echo "$NAME: command not found: $1"      ;;
+        *)  search $CATEGORY ${@:1:${$#}}       
+            echo "$NAME: search: $(cat $RES_LIST | wc -l) results" ;;          
     esac
 }
 
