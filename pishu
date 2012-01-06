@@ -4,7 +4,7 @@
 # PISHU - The Piratebay Shell Utility
 #
 # Maintainer: Robert Welin <robert dot welin at gmail dot com>
-# Last Change: Fri October 07 2011
+# Last Change: Fri January 06 2012
 #
 
 TPB='http://thepiratebay.org' # Site that the script searches
@@ -215,11 +215,12 @@ function search
 #=======================================================================
 function print_basic_info
 {
+    lines=`cat $RES_LIST | wc -l`
     torrent=`head -$1 $RES_LIST | tail -1`
     info=`head -$1 $INFO_LIST | tail -1`
     seeders=`head -$(($1*2-1)) $SEED_LIST | tail -1`
     leechers=`head -$(($1*2)) $SEED_LIST | tail -1`
-    printf "%2d :: $(basename $torrent)\n" $index
+    printf "(%2d/$lines) :: $(basename $torrent)\n" $1
     echo "    $info"
     echo "    Seeds: $seeders Leechers: $leechers"
 }
@@ -235,7 +236,6 @@ function print_res_list
 {
     index=$1
     start=$(($1+$2-1))
-    lines=`cat $RES_LIST | wc -l`
     length=$2
     for line in `head -$start $RES_LIST | tail -$length` ; do
         print_basic_info $index
@@ -402,11 +402,14 @@ function interactive_download
 }
 
 #===  FUNCTION  ========================================================
-#        NAME: parse_command
-# DESCRIPTION: Parses the interactive commands
+#          NAME: parse_command
+#   DESCRIPTION: Parses the interactive commands
+#   PARAMETER 1: A command
+# PARAMETER 2..: Addition paramaters for the command
 #=======================================================================
 function parse_command
 {
+    [ $# -eq 0 ] && return
     case "$1" in
         $I_TOP|":t")      top ${@:2:${$#}}                         ;;
         $I_SEARCH|":s")   
@@ -430,12 +433,17 @@ function parse_command
 }
 
 #===  FUNCTION  ========================================================
-#        NAME: interactive_main
-# DESCRIPTION: The main function of the interactive mode
+#          NAME: interactive_main
+#   DESCRIPTION: The main function of the interactive mode
+# PARAMETER 1..: The arguments for the first search
 #=======================================================================
 function interactive_main
 {
     set_category "$ALL"
+    if [ $# -gt 0 ]; then
+        search $CATEGORY ${@}       
+        echo "$NAME: search: $(cat $RES_LIST | wc -l) results"
+    fi
     while [ 0 ] ; do
         echo -n "$NAME> "
         read cmd
@@ -443,6 +451,7 @@ function interactive_main
     done
 }
 
+interactive=0
 args[0]="$SEARCH" # Default search option
 args[1]="$ALL"    # Defualt search category
 
@@ -460,11 +469,14 @@ for arg in "$@" ; do
         $TOP|"-t")    args[0]="$TOP"    ;;
         $SEARCH|"-s") args[0]="$SEARCH" ;;
         $HELP|"-h")   print_help        ;;
-        $INTER|"-i")  interactive_main  ;;
+        $INTER|"-i")  interactive=1     ;;
         -*)           bad_option "$arg" ;;
         *) args[${#args[@]}]="${arg}"   ;;
     esac
 done
 
-main ${args[@]}
-
+if [ $interactive -eq 1 ]; then
+    interactive_main ${args[@]:2:${#args[@]}}
+else
+    main ${args[@]}
+fi
