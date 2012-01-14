@@ -167,7 +167,7 @@ function print_info
 function list
 {
     tmp=$PIRATE_DIR/tmp
-    wget --quiet --continue "$1" -O $tmp
+    download "$1" -O $tmp
     grep "<div class=\"detName\"" $tmp | \
         awk '{gsub(/href=|"/,""); print $3}' \
         > $RES_LIST
@@ -265,7 +265,7 @@ function info
 #=======================================================================
 function download
 {
-    wget --quiet --continue $1
+    wget --quiet --continue $@
 }
 
 #===  FUNCTION  ========================================================
@@ -411,7 +411,9 @@ function parse_command
 {
     [ $# -eq 0 ] && return
     case "$1" in
-        $I_TOP|":t")      top ${@:2:${$#}}                         ;;
+        $I_TOP|":t")      
+            top $CATEGORY
+            echo "$NAME: top: $(cat $RES_LIST | wc -l) results"    ;;
         $I_SEARCH|":s")   
             search $CATEGORY ${@:2:${$#}}       
             echo "$NAME: search: $(cat $RES_LIST | wc -l) results" ;;
