@@ -167,18 +167,14 @@ function print_info
 function list
 {
     tmp=$PIRATE_DIR/tmp
-    download "$1" -O $tmp
-    grep "<div class=\"detName\"" $tmp | \
-        awk '{gsub(/href=|"/,""); print $3}' \
+    wget --quiet --continue "$1" -O $tmp
+    awk '/<div class="detName"/ {gsub(/href=|"/,""); print $3}' $tmp \
         > $RES_LIST
-    grep "title=\"Download this torrent\"" $tmp | \
-        awk '{gsub(/href=|"/,""); print $2}' \
+    awk '/".*\.torrent"/ {gsub(/href=|"/,""); print $13}' $tmp \
         > $TOR_LIST
-    grep "<td align=\"right\">" $tmp | \
-        awk '{gsub(/<[^>]*>|^[ \t]*/,""); print}' \
+    awk '/<td align="right">/ {gsub(/<[^>]*>|^[ \t]*/,""); print}' $tmp \
         > $SEED_LIST
-    grep "<font class=\"detDesc\">" $tmp | \
-        awk '{gsub(/<[^>]*>|^[ \t]*/,""); gsub(/&nbsp;/," "); print}' \
+    awk '/<font class="detDesc">/ {gsub(/<[^>]*>|^[ \t]*/,""); gsub(/&nbsp;/," "); print}' $tmp \
         > $INFO_LIST
     rm --force $tmp     
 }
@@ -259,13 +255,14 @@ function info
 }
 
 #===  FUNCTION  ========================================================
-# NAME: download
+#        NAME: download
 # DESCRIPTION: Downloads a file
 # PARAMETER 1: The url of the file
 #=======================================================================
 function download
 {
-    wget --quiet --continue $@
+    echo $1
+    wget --quiet --continue $1
 }
 
 #===  FUNCTION  ========================================================
