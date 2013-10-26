@@ -4,10 +4,10 @@
 # PISHU - The Piratebay Shell Utility
 #
 # Maintainer: Robert Welin <robert dot welin at gmail dot com>
-# Last Change: Fri January 06 2012
+# Last Change: Tue January 15 2013
 #
 
-TPB='http://thepiratebay.org' # Site that the script searches
+TPB='http://thepiratebay.se' # Site that the script searches
 NAME='pishu'            # Name of the scrip
 USAGE="$NAME [OPTION]... [SEARCH WORD]..." # Usage help message
 
@@ -38,14 +38,14 @@ INTER="--interactive" # Starts script in interactive mode
 
 # The available search categories
 declare -a CATEGORIES
-CATEGORIES=("$VIDEO" "$AUDIO" "$GAME" "$MUSIC" 
+CATEGORIES=("$VIDEO" "$AUDIO" "$GAME" "$MUSIC"
             "$MOVIE" "$ABOOK" "$EBOOK" "$ALL")
 
-# An associative array of all the search categories 
+# An associative array of all the search categories
 # and it's corresponding numerical code on TPB
 declare -A search_categories
-search_categories=([$VIDEO]=200 [$AUDIO]=100 [$GAME]=400 
-                   [$MUSIC]=101 [$ABOOK]=102 [$MOVIE]=201 
+search_categories=([$VIDEO]=200 [$AUDIO]=100 [$GAME]=400
+                   [$MUSIC]=101 [$ABOOK]=102 [$MOVIE]=201
                    [$EBOOK]=601 [$ALL]=0)
 
 #----------------------------------------------------------------
@@ -79,7 +79,7 @@ USAGE:
 OPTIONS:
     $HELP
         Display help message
-    
+
     $SEARCH
         Do a search (default option)
 
@@ -98,7 +98,7 @@ SEARCH CATEGORIES:
 
 #===  FUNCTION  ========================================================
 #        NAME: bad_option
-# DESCRIPTION: 
+# DESCRIPTION:
 #=======================================================================
 function bad_option
 {
@@ -111,7 +111,7 @@ Try '$NAME $HELP' for more options."
 
 #===  FUNCTION  ========================================================
 #        NAME: prompt
-# DESCRIPTION: Asks the user a question and 
+# DESCRIPTION: Asks the user a question and
 #              returns 1 if [nN] and otherwise 0
 # PARAMETER 1: The question
 #     EXAMPLE: prompt "Download item?"
@@ -158,25 +158,28 @@ function print_info
 
 #===  FUNCTION  ========================================================
 #        NAME: list
-# DESCRIPTION: Downloads a tpb search result page and extracts 
+# DESCRIPTION: Downloads a tpb search result page and extracts
 #              torrent names, torrent urls and some information
 # PARAMETER 1: The url of the search
 #    EXAMPLES: list "thepiratebay.org/search/pulp fiction/0/7/200"
-#              list "thepiratebay.org/top/all" 
+#              list "thepiratebay.org/top/all"
 #=======================================================================
 function list
 {
     tmp=$PIRATE_DIR/tmp
     wget --quiet --continue "$1" -O $tmp
-    awk '/<div class="detName"/ {gsub(/href=|"/,""); print $3}' $tmp \
+    grep -o 'class="detLink" .*' $tmp | \
+        cut -f 4- -d " " | \
+        sed 's/">.*//' \
         > $RES_LIST
-    awk '/".*\.torrent"/ {gsub(/href=|"/,""); print $13}' $tmp \
+    grep -o '".*" title="Download this torrent using magnet"' $tmp | \
+        awk '{gsub("\"", "", $1); print $1}' \
         > $TOR_LIST
     awk '/<td align="right">/ {gsub(/<[^>]*>|^[ \t]*/,""); print}' $tmp \
         > $SEED_LIST
     awk '/<font class="detDesc">/ {gsub(/<[^>]*>|^[ \t]*/,""); gsub(/&nbsp;/," "); print}' $tmp \
         > $INFO_LIST
-    rm --force $tmp     
+    rm --force $tmp
 }
 
 #===  FUNCTION  ========================================================
@@ -216,7 +219,7 @@ function print_basic_info
     info=`head -$1 $INFO_LIST | tail -1`
     seeders=`head -$(($1*2-1)) $SEED_LIST | tail -1`
     leechers=`head -$(($1*2)) $SEED_LIST | tail -1`
-    printf "(%2d/$lines) :: $(basename $torrent)\n" $1
+    printf "(%2d/$lines) :: $torrent\n" $1
     echo "    $info"
     echo "    Seeds: $seeders Leechers: $leechers"
 }
@@ -242,7 +245,7 @@ function print_res_list
 
 #===  FUNCTION  ========================================================
 #        NAME: info
-# DESCRIPTION: Downloads a tbp torrent page and 
+# DESCRIPTION: Downloads a tbp torrent page and
 #              displays the info section
 # PARAMETER 1: The url of the torrent page
 #=======================================================================
@@ -251,7 +254,7 @@ function info
     tmp=$(mktemp)
     wget --quiet --continue $1 --output-document $tmp && \
         print_info $tmp
-    rm $tmp      
+    rm $tmp
 }
 
 #===  FUNCTION  ========================================================
@@ -263,6 +266,20 @@ function download
 {
     echo $1
     wget --quiet --continue $1
+}
+
+#===  FUNCTION  ========================================================
+#        NAME: save
+# DESCRIPTION: Saves a magnet link in a file with the name of the
+#              torrent appended with ".magnet"
+# PARAMETER 1: The number of the result
+#=======================================================================
+function save
+{
+    magnet_file="$(head -$1 $RES_LIST | tail -1)".magnet
+    echo "$(head -$1 $TOR_LIST | tail -1)" \
+        > "$magnet_file"
+    echo "Saved magnet file '$magnet_file'"
 }
 
 #===  FUNCTION  ========================================================
@@ -278,15 +295,14 @@ function main
     fi
     num=1
     lines=`cat $RES_LIST | wc -l`
-    if [[ $lines -eq 0 ]] ; then 
+    if [[ $lines -eq 0 ]] ; then
         echo "$NAME: No search results"
         cleanup_temp
     fi
     for line in `cat $RES_LIST` ; do
         print_basic_info $num
         prompt "Get info?" info '$TPB$line'
-        prompt "Download torrent?" \
-            download '$(head -$num $TOR_LIST | tail -1)' && break
+        prompt "Download torrent?" save $num
         prompt "Next result?" || break
         ((num++))
     done
@@ -295,7 +311,7 @@ function main
 
 #===  FUNCTION  ========================================================
 #        NAME: set_category
-# DESCRIPTION: Sets the variable CATEGORY to the corresponding 
+# DESCRIPTION: Sets the variable CATEGORY to the corresponding
 #              category representation of $1. It $1 is not a
 #              valid category, an error message is displayed
 #              and CATEGORY is set to $ALL
@@ -323,7 +339,7 @@ function get_category
 
 #===  FUNCTION  ========================================================
 #        NAME: print_list
-# DESCRIPTION: Prints ten elements in the results list at a time       
+# DESCRIPTION: Prints ten elements in the results list at a time
 #=======================================================================
 function print_list
 {
@@ -348,7 +364,7 @@ function print_list
 #        NAME: interactive_info
 # DESCRIPTION: Displays the info page of a torrent in interactive mode
 # PARAMETER 1: The number in the result list
-#=======================================================================  
+#=======================================================================
 function interactive_info
 {
     lines=`cat $RES_LIST | wc -l`
@@ -393,8 +409,8 @@ function interactive_download
             echo "$NAME: download: Index out of bound at $index. Only $lines results available."
             return 1
         fi
-        download "$(head -$index $TOR_LIST | tail -1)"
-        echo "$NAME: Downloaded torrent: $(basename $(head -$index $RES_LIST | tail -1))"
+        save $index
+        echo "$NAME: Saved magnet url for $(head -$index $RES_LIST | tail -1)"
     done
 }
 
@@ -408,14 +424,14 @@ function parse_command
 {
     [ $# -eq 0 ] && return
     case "$1" in
-        $I_TOP|":t")      
+        $I_TOP|":t")
             top $CATEGORY
             echo "$NAME: top: $(cat $RES_LIST | wc -l) results"    ;;
-        $I_SEARCH|":s")   
-            search $CATEGORY ${@:2:${$#}}       
+        $I_SEARCH|":s")
+            search $CATEGORY ${@:2:${$#}}
             echo "$NAME: search: $(cat $RES_LIST | wc -l) results" ;;
-        $I_CATEGORY|":c") 
-            if [[ ${#2} -gt 0 ]] ; then 
+        $I_CATEGORY|":c")
+            if [[ ${#2} -gt 0 ]] ; then
                 set_category $2
             else
                 get_category
@@ -426,8 +442,8 @@ function parse_command
         $I_HELP|":h"|"?") print_interactive_help                   ;;
         $I_QUIT|":q")     cleanup_temp                             ;;
         :*)               echo "$NAME: command not found: $1"      ;;
-        *)  search $CATEGORY ${@:1:${$#}}       
-            echo "$NAME: search: $(cat $RES_LIST | wc -l) results" ;;          
+        *)  search $CATEGORY ${@:1:${$#}}
+            echo "$NAME: search: $(cat $RES_LIST | wc -l) results" ;;
     esac
 }
 
@@ -440,7 +456,7 @@ function interactive_main
 {
     set_category "$ALL"
     if [ $# -gt 0 ]; then
-        search $CATEGORY ${@}       
+        search $CATEGORY ${@}
         echo "$NAME: search: $(cat $RES_LIST | wc -l) results"
     fi
     while [ 0 ] ; do
