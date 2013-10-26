@@ -3,9 +3,6 @@
 #
 # PISHU - The Piratebay Shell Utility
 #
-# Maintainer: Robert Welin <robert dot welin at gmail dot com>
-# Last Change: Tue January 15 2013
-#
 
 TPB='http://thepiratebay.se' # Site that the script searches
 NAME='pishu'            # Name of the scrip
