@@ -16,6 +16,7 @@ SEED_LIST=$PIRATE_DIR/seedlist  # Seed/leecher statuses
 RES_LIST=$PIRATE_DIR/reslist    # List of search resluts
 TOR_LIST=$PIRATE_DIR/torlist    # List of corresponding torrents
 INFO_LIST=$PIRATE_DIR/infolist  # Extra information
+LINK_LIST=$PIRATE_DIR/linklist  # Links to torrent page
 
 #----------------------------------------------------------------
 #  switches
@@ -176,6 +177,8 @@ function list
         > $SEED_LIST
     awk '/<font class="detDesc">/ {gsub(/<[^>]*>|^[ \t]*/,""); gsub(/&nbsp;/," "); print}' $tmp \
         > $INFO_LIST
+    awk '/class="detLink"/ {split($0,a,"href=\""); split(a[2],b,"\""); print b[1]}' $tmp \
+        > $LINK_LIST
     rm --force $tmp
 }
 
@@ -298,7 +301,7 @@ function main
     fi
     for line in `cat $RES_LIST` ; do
         print_basic_info $num
-        prompt "Get info?" info '$TPB$line'
+        prompt "Get info?" info "$TPB"`cat $LINK_LIST | head -$num | tail -1`
         prompt "Download torrent?" save $num
         prompt "Next result?" || break
         ((num++))
